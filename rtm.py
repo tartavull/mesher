@@ -18,13 +18,19 @@ vertex_2 = api.getSegmentVertex(47339,1,0,0,1668);
 mesh_2 = Mesh(vertex_2)
 
 
-# mesh_2.displayMesh(mlab)
+
 mesh_1.merge(mesh_2)
-mesh_1.weldVertices(0.1);
-
 mesh_1.displayStats()
-# mesh_1.displayMesh(mlab)
+mesh_1.displayMesh(mlab)
+mlab.show()
 
 
-# mlab.show()
+mesh_1.weldVertices(0.002)
+mesh_1.removeZeroAreaTriangles()
+mesh_1.displayStats()
+
+mesh_1.displayMesh(mlab)
+
+
+mlab.show()
 

@@ -3,6 +3,7 @@ import util
 
 from tvtk.api import tvtk
 
+
 class Mesh:
 
 	def __init__(self, vertex):
@@ -14,9 +15,9 @@ class Mesh:
 
 		self.triangles = self.trianglesFromVertex(self.vertex);
 
-		self.displayStats()
-		self.removeZeroAreaTriangles()
-		self.displayStats()
+		# self.displayStats()
+		# self.removeZeroAreaTriangles()
+		# self.displayStats()
 
 	def trianglesFromVertex(self, vertex):
 
@@ -44,47 +45,79 @@ class Mesh:
 		print len(remove)
 		self.triangles[:] = [ item for i,item in enumerate(self.triangles) if i not in remove]
 
+	# @profile
+	def getBucket(self, xpos, ypos, zpos):
 
-	def makeUniformGrid(self, grid_size):
+		if not hasattr(self,'grid'):
+			self.grid = dict()
 
-		grid = dict()
+		if not xpos in self.grid:
+			self.grid[xpos] = dict()
 
-		divs = int(math.ceil(1.0 / grid_size))
-		for x in range(divs):
-			grid[x] = dict()
+		if not ypos in self.grid[xpos]:
+			self.grid[xpos][ypos] = dict()
 
-			for y in range(divs):
-				grid[x][y] = dict()
+		if not zpos in self.grid[xpos][ypos]:
+			self.grid[xpos][ypos][zpos] = list()
 
-				for z in range(divs):
-					grid[x][y][z] = list()
-
-		return grid
-
-		
-		return grid
+		return self.grid[xpos][ypos][zpos]
 
 	def weldVertices(self, tolerance):
 
-		grid = self.makeUniformGrid(tolerance)
+		count = 0
 
-		for vertex in self.vertex:
+		idx_map = dict()
+		for vertex_idx ,vertex in enumerate(self.vertex):
 			xpos = int(math.floor(vertex[0] / tolerance))
 			ypos = int(math.floor(vertex[1] / tolerance))
 			zpos = int(math.floor(vertex[2] / tolerance))
 
-			for x_grid in range(xpos-1, xpos+2):
-				for y_grid in range(ypos-1, ypos+2):
-					for z_grid in range(zpos-1, zpos+2):
+			neighbor = self.findNeighborVertex(tolerance, vertex, xpos, ypos, zpos)			
 						
-						for neighbor in grid[x_grid][y_grid][z_grid]:
+			#If this can't be merge with any of the neighbors , add it to the list
+			if neighbor:
+				idx_map[vertex_idx] = neighbor[0]
+			else:
+				self.getBucket(xpos,ypos,zpos).append((vertex_idx, vertex))
+				idx_map[vertex_idx] = vertex_idx	
+				count = count+1
 
-							if util.distanceBetweenVertex( neighbor , vertex ) < tolerance:
-								print 'merge ' , neighbor ,' and ' , vertex 
+		
+		keep_vertex = sorted(set(idx_map.values()))
+		self.vertex[:] = [ item for i,item in enumerate(self.vertex) if i in keep_vertex]
 
-						#If this can't be merge with any of the neighbors , add it to the list
-						grid[x_grid][y_grid][z_grid].append(vertex)	 
+		for key  in idx_map: 
+			value = idx_map[key]
+			idx_map[key] = util.binary_search(keep_vertex,value)
+		
+		for triangle_idx , triangle in enumerate(self.triangles):
 
+			self.triangles[triangle_idx] = (idx_map[triangle[0]] , idx_map[triangle[1]] , idx_map[triangle[2]])
+
+	# @profile
+	def findNeighborVertex(self, tolerance, vertex , xpos, ypos, zpos):
+
+		grid_size = int(math.ceil(1.0 / tolerance))
+
+		x_min = max(0,xpos-1)
+		x_max = min(xpos+2, grid_size)
+
+		y_min = max(0, ypos-1)
+		y_max = min(ypos+2, grid_size)
+
+		z_min = max(0, zpos-1)
+		z_max = min(zpos+2, grid_size)
+		
+		for x_grid in range(x_min, x_max):
+				for y_grid in range(y_min, y_max):
+					for z_grid in range(z_min, z_max):
+						
+						for neighbor in self.getBucket(x_grid,y_grid,z_grid):
+
+							if util.distanceBetweenVertex( neighbor[1] , vertex ) < tolerance:
+								return neighbor
+
+		return False
 
 
 
@@ -140,7 +173,7 @@ class Mesh:
 
 		mesh = tvtk.PolyData(points=util.list2DToNumpy(self.vertex), polys=util.list2DToNumpy(self.triangles))
 		surf = mlab.pipeline.surface(mesh, opacity=1.0)
-		# mlab.pipeline.surface(mlab.pipeline.extract_edges(surf), color=(0, 0, 0))
+		mlab.pipeline.surface(mlab.pipeline.extract_edges(surf), color=(0, 0, 0))
 
 		
 
