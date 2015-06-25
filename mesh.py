@@ -2,22 +2,21 @@ import math
 import util
 
 from tvtk.api import tvtk
-
+import ctypes 
+import openctm 
+import blob
 
 class Mesh:
 
-	def __init__(self, vertex):
+	def __init__(self, vertex = None):
 
-		if vertex == None or len(vertex) < 3:
-			raise Exception('Not a valid vertex data')
+		if vertex == None:
+			self.vertex = list()
+			self.triangles = list()
 
-		self.vertex = vertex
-
-		self.triangles = self.trianglesFromVertex(self.vertex);
-
-		# self.displayStats()
-		# self.removeZeroAreaTriangles()
-		# self.displayStats()
+		else:	
+			self.vertex = vertex
+			self.triangles = self.trianglesFromVertex(self.vertex);
 
 	def trianglesFromVertex(self, vertex):
 
@@ -33,7 +32,9 @@ class Mesh:
 	def removeZeroAreaTriangles(self):
 
 		remove = set()
+
 		for triangleIdx, triangle in enumerate(self.triangles):
+
 			vertex_0 = self.vertex[triangle[0]]
 			vertex_1 = self.vertex[triangle[1]]
 			vertex_2 = self.vertex[triangle[2]]
@@ -42,10 +43,9 @@ class Mesh:
 				
 				remove.add(triangleIdx)
 
-		print len(remove)
+
 		self.triangles[:] = [ item for i,item in enumerate(self.triangles) if i not in remove]
 
-	# @profile
 	def getBucket(self, xpos, ypos, zpos):
 
 		if not hasattr(self,'grid'):
@@ -64,8 +64,6 @@ class Mesh:
 
 	def weldVertices(self, tolerance):
 
-		count = 0
-
 		idx_map = dict()
 		for vertex_idx ,vertex in enumerate(self.vertex):
 			xpos = int(math.floor(vertex[0] / tolerance))
@@ -80,7 +78,6 @@ class Mesh:
 			else:
 				self.getBucket(xpos,ypos,zpos).append((vertex_idx, vertex))
 				idx_map[vertex_idx] = vertex_idx	
-				count = count+1
 
 		
 		keep_vertex = sorted(set(idx_map.values()))
@@ -94,7 +91,7 @@ class Mesh:
 
 			self.triangles[triangle_idx] = (idx_map[triangle[0]] , idx_map[triangle[1]] , idx_map[triangle[2]])
 
-	# @profile
+
 	def findNeighborVertex(self, tolerance, vertex , xpos, ypos, zpos):
 
 		grid_size = int(math.ceil(1.0 / tolerance))
@@ -120,13 +117,11 @@ class Mesh:
 		return False
 
 
-
-
 	def computeBoundingBox(self):
 
 		#Initialize the boundingBox with values from the first vertex
 		boundingBox = { 'max':{'x':self.vertex[0][0], 'y':self.vertex[0][1], 'z':self.vertex[0][2]},
-											   'min':{'x':self.vertex[0][0], 'y':self.vertex[0][1], 'z':self.vertex[0][2]}}
+										'min':{'x':self.vertex[0][0], 'y':self.vertex[0][1], 'z':self.vertex[0][2]}}
 
 		for vertex in self.vertex:
 
@@ -149,7 +144,6 @@ class Mesh:
 				boundingBox['min']['z'] = vertex[2]
 
 		self.boundingBox = boundingBox
-		print 
 
 	def merge(self, mesh):
 
@@ -175,6 +169,23 @@ class Mesh:
 		surf = mlab.pipeline.surface(mesh, opacity=1.0)
 		mlab.pipeline.surface(mlab.pipeline.extract_edges(surf), color=(0, 0, 0))
 
-		
+	def dump(self, filename = "mesh.ctm"):
+		pVertex = blob.make_blob(self.vertex, ctypes.c_float)
+		pTriangles = blob.make_blob(self.triangles, ctypes.c_uint)
+		pNormals = ctypes.POINTER(ctypes.c_float)()
+		ctm = openctm.ctmNewContext(openctm.CTM_EXPORT)
+		openctm.ctmDefineMesh(ctm, pVertex, len(self.vertex), pTriangles, len(self.triangles), pNormals)
+		openctm.ctmSave(ctm, filename)
+		openctm.ctmFreeContext(ctm)
+
+	def move(self, x_relative, y_relative, z_relative):
+
+		for vertex_idx , vertex in enumerate(self.vertex):
+			self.vertex[vertex_idx] = (vertex[0] + x_relative , vertex[1] + y_relative, vertex[2] + z_relative)
+
+	def scale(self, x_scale, y_scale, z_scale):
+
+		for vertex_idx , vertex in enumerate(self.vertex):
+			self.vertex[vertex_idx] = (vertex[0] * x_scale , vertex[1] * y_scale, vertex[2] * z_scale)
 
 
